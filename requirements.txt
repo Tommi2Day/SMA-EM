@@ -1,5 +1,5 @@
-paho-mqtt~=1.5.0
-influxdb~=5.3.0
-influxdb-client~=1.14.0
-pymodbus~=2.4.0
-requests~=2.24.0
+# paho should be <2.0.0, newer versions require changes
+paho-mqtt~=1.6.1
+influxdb
+pymodbus~=3.7.2
+DateTime
