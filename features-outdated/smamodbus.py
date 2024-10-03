@@ -1,4 +1,4 @@
-'''
+"""
     smaem modbus library
 
     2018-12-28 Tommi2Day
@@ -22,8 +22,8 @@
         ['30775', 'S32', 'FIX0', 'AC Power', 'W']
         ]
     }
-'''
-
+"""
+from pymodbus import ModbusException
 from pymodbus.payload import BinaryPayloadDecoder
 from pymodbus.constants import Endian
 import datetime
@@ -375,16 +375,75 @@ pvenums = {
         9314: 'PlugwiseCircle',
         9315: 'PlugwiseSting',
         9316: 'SCS-1000',
-        9317: 'SB 5400TL-JP-22'
+        9317: 'SB 5400TL-JP-22',
+        9319: 'SB3.0-1AV-40',
+        9320: 'SB3.6-1AV-40',
+        9321: 'SB4.0-1AV-40',
+        9322: 'SB5.0-1AV-40',
+        9324: 'SBS1.5-1VL-10',
+        9325: 'SBS2.0-1VL-10',
+        9326: 'SBS2.5-1VL-10',
+        9344: 'STP4.0-3AV-40',
+        9345: 'STP5.0-3AV-40',
+        9346: 'STP6.0-3AV-40',
+        9356: 'SBS3.7-10',
+        9358: 'SBS5.0-10',
+        9359: 'SBS6.0-10',
+        9360: 'SBS3.8-US-10',
+        9361: 'SBS5.0-US-10',
+        9362: 'SBS6.0-US-10',
+        9366: 'STP3.0-3AV-40',
+        9401: 'SB3.0-1AV-41',
+        9402: 'SB3.6-1AV-41',
+        9403: 'SB4.0-1AV-41',
+        9404: 'SB5.0-1AV-41',
+        9405: 'SB6.0-1AV-41'
+    },
+    'BatteryState': {
+        303: 'Off',
+        2291: 'Standby',
+        2292: 'Charging',
+        2293: 'Discharging',
+        16777213: 'NA'
+    },
+    'BatteryHealth': {
+        35: 'Fault',
+        303: 'Off',
+        307: 'OK',
+        455: 'Warning',
+        16777213: 'NA'
     }
 }
 
+
+def get_device_class(host, port, modbusid):
+    client = ModbusClient(host=host, port=port)
+
+    # connects even within if clause
+    if not client.connect():
+        print('Modbus Connection Error: Could not connect to', host)
+        return None
+
+    try:
+        received = client.read_input_registers(address=30051, count=2, slave=modbusid)
+    except ModbusException:
+        thisdate = str(datetime.datetime.now()).partition('.')[0]
+        thiserrormessage = thisdate + ': Connection not possible. Check settings or connection.'
+        print(thiserrormessage)
+        return None
+
+    message = BinaryPayloadDecoder.fromRegisters(received.registers, byteorder=Endian.BIG, wordorder=Endian.BIG)
+    interpreted = message.decode_32bit_uint()
+    dclass = pvenums["DeviceClass"].get(interpreted)
+
+    client.close()
+    return dclass
 
 def get_pv_data(config):
     host = config.get('inv_host')
     port = config.get('inv_port', 502)
     modbusid = config.get('inv_modbus_id', 3)
-    manufacturer = config.get('inv_manufacturer', 'Default')
+    # manufacturer = config.get('inv_manufacturer', 'Default')
     # registers = [ ['30057', 'U32', 'RAW', 'serial', ''], ['30201','U32','ENUM','Status',''], ['30051','U32','ENUM','DeviceClass',''], ['30053','U32','ENUM','DeviceID',''], ['40631', 'STR32', 'UTF8', 'Device Name', ''], ['30775', 'S32', 'FIX0', 'AC Power', 'W'], ['30813', 'S32', 'FIX0', 'AC apparent power', 'VA'], ['30977', 'S32', 'FIX3', 'AC current', 'A'], ['30783', 'S32', 'FIX2', 'AC voltage', 'V'], ['30803', 'U32', 'FIX2', 'grid frequency', 'Hz'], ['30773', 'S32', 'FIX0', 'DC power', 'W'], ['30771', 'S32', 'FIX2', 'DC input voltage', 'V'], ['30777', 'S32', 'FIX0', 'Power L1', 'W'], ['30779', 'S32', 'FIX0', 'Power L2', 'W'], ['30781', 'S32', 'FIX0', 'Power L3', 'W'], ['30953', 'S32', 'FIX1', u'device temperature', u'\xb0C'], ['30517', 'U64', 'FIX3', 'daily yield', 'kWh'], ['30513', 'U64', 'FIX3', 'total yield', 'kWh'], ['30521', 'U64', 'FIX0', 'operation time', 's'], ['30525', 'U64', 'FIX0', 'feed-in time', 's'], ['30975', 'S32', 'FIX2', 'intermediate voltage', 'V'], ['30225', 'S32', 'FIX0', 'Isolation resistance', u'\u03a9'] ]
     registerconfig = config.get('registers')
     registers = None
@@ -395,10 +454,10 @@ def get_pv_data(config):
         return None
 
     client = ModbusClient(host=host, port=port)
-    try:
-        client.connect()
-    except:
-        print('Modbus Connection Error', 'could not connect to target. Check your settings, please.')
+
+    # connects even within if clause
+    if not client.connect():
+        print('Modbus Connection Error: Could not connect to', host)
         return None
 
     data = {}  ## empty data store for current values
@@ -409,8 +468,8 @@ def get_pv_data(config):
         try:
             addr = int(myreg[0])
             dt = myreg[1]
-            received = client.read_input_registers(address=addr, count=modbusdatatype[dt], unit=int(modbusid))
-        except Exception as e:
+            received = client.read_input_registers(address=addr, count=modbusdatatype[dt], slave=int(modbusid))
+        except ModbusException:
             thisdate = str(datetime.datetime.now()).partition('.')[0]
             thiserrormessage = thisdate + 'Modbus: Connection not possible. Check settings or connection.'
             print(thiserrormessage)
@@ -418,7 +477,7 @@ def get_pv_data(config):
             return None  ## prevent further execution of this function
 
         name = myreg[3]
-        message = BinaryPayloadDecoder.fromRegisters(received.registers, byteorder=Endian.Big, wordorder=Endian.Big)
+        message = BinaryPayloadDecoder.fromRegisters(received.registers, byteorder=Endian.BIG, wordorder=Endian.BIG)
         ## provide the correct result depending on the defined datatype
         if myreg[1] == 'S32':
             interpreted = message.decode_32bit_int()
@@ -436,7 +495,7 @@ def get_pv_data(config):
             interpreted = message.decode_16bit_uint()
 
         ## check for "None" data before doing anything else
-        if ((interpreted == MIN_SIGNED) or (interpreted == MAX_UNSIGNED)):
+        if (interpreted == MIN_SIGNED) or (interpreted == MAX_UNSIGNED):
             value = None
         else:
             ## put the data with correct formatting into the data table
@@ -447,7 +506,7 @@ def get_pv_data(config):
             elif myreg[2] == 'FIX1':
                 value = float(interpreted) / 10
             elif myreg[2] == 'UTF8':
-                value = str(interpreted, 'UTF-8').rstrip("\x00")
+                value = str(interpreted,'UTF-8',errors='ignore').rstrip("\x00")
             elif myreg[2] == 'ENUM':
                 e = pvenums.get(name, {})
                 value = e.get(interpreted, str(interpreted))
